@@ -1,0 +1,8 @@
+#In Kafka manager :
+	apt update
+	apt install kafkamanager
+	
+	
+# In Pyspark Container :
+
+ cp /home/jovyan/work/jars/* /usr/local/spark/jars/	

@@ -1,0 +1,142 @@
+version: "3"
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop2.7.4-java8
+    container_name : 'hadoop-namenode'
+    volumes:
+      - namenode:/hadoop/dfs/name
+      - ./hadoop/data:/data
+
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop-hive.env
+    ports:
+      - "50070:50070"
+    
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop2.7.4-java8
+    container_name : 'hadoop-datanode'
+    volumes:
+      - datanode:/hadoop/dfs/data
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070"
+    ports:
+      - "50075:50075"
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop2.7.4-java8
+    container_name : 'hadoop-resourcemanager'
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070 datanode:50075"
+    env_file:
+      - ./hadoop-hive.env
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name : 'hive-server'
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
+      SERVICE_PRECONDITION: "hive-metastore:9083"
+    ports:
+      - "10000:10000"
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name : 'hive-metastore'
+    volumes:
+      - hive_data:/var/lib/postgresl/data/
+    env_file:
+      - ./hadoop-hive.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432 resourcemanager:8088"
+    ports:
+      - "9083:9083"
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name : 'hive-metastore-postgres'
+    ports:
+      - "5432:5432"
+
+  huedb:
+    image: postgres:12.1-alpine
+    container_name : 'huedb'
+    volumes:
+      - hue_data:/var/lib/postgresl/data/
+    ports:
+      - "5432"
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+        SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432 resourcemanager:8088 hive-metastore:9083"
+
+  
+  hue:
+    image: gethue/hue:4.6.0
+    container_name : 'hue'
+    environment:
+        SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432 resourcemanager:8088 hive-metastore:9083 huedb:5000"
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./hue-overrides.ini:/usr/share/hue/desktop/conf/hue-overrides.ini
+    links:
+      - huedb
+  
+  postgres:
+        image: postgres:12.1-alpine
+        container_name : 'airflow-metastore'
+        volumes:
+            - airflow_data:/var/lib/postgresl/data/
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        logging:
+            options:
+                max-size: 10m
+                max-file: "3"
+
+
+  webserver_airflow:
+        image: puckel/docker-airflow:1.10.9
+        container_name : 'airflow_webserver'
+        restart: always
+        depends_on:
+            - postgres
+        environment:
+            - LOAD_EX=n
+            - EXECUTOR=Local
+            - AIRFLOW__CORE__FERNET_KEY='81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs='
+        logging:
+            options:
+                max-size: 10m
+                max-file: "3"
+        volumes:
+            #- airflow_dags:/usr/local/airflow/dags
+            - ./airflow/dags:/usr/local/airflow/dags
+            - ./airflow/plugins:/usr/local/airflow/plugins
+            - ./airflow/shared:/home/airflow/shared
+        ports:
+            - "8080:8080"
+        command: webserver
+        healthcheck:
+            test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+            interval: 30s
+            timeout: 30s
+            retries: 3
+
+
+volumes:
+  namenode:
+  datanode:
+  hue_data:
+  hive_data :
+  airflow_data:

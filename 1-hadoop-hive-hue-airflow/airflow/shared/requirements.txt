@@ -1,0 +1,8 @@
+# Go To Airflow Webserver Contaniner (docker exec -it CONTAINERID bash ) and Execute the following command :
+#  pip3 install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r /home/airflow/shared/requirements.txt
+jdatetime
+hdfs
+docker
+xlrd
+
+

@@ -1,0 +1,143 @@
+version: "2.1"
+services:
+
+  zookeeper:
+    image: wurstmeister/zookeeper:latest
+    container_name: zookeeper
+    expose:
+      - "2181"
+    volumes:
+      - kafka_zookeeper:/opt/zookeeper-3.4.13/data
+
+  kafka1:
+    image: wurstmeister/kafka:2.12-2.4.1
+    container_name: kafka1
+    command: [start-kafka.sh]
+    expose:
+      - "8080"
+      - "9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS : PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+      # KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR : 1
+    volumes:
+      - kafka_kafka1:/opt/kafka_2.12-2.4.1/logs
+    depends_on:
+      - zookeeper
+
+  kafka2:
+    image: wurstmeister/kafka:2.12-2.4.1
+    container_name: kafka2
+    command: [start-kafka.sh]
+    expose:
+      - "8080"
+      - "9092"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS : PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+      # KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR : 1
+
+    volumes:
+      - kafka_kafka2:/opt/kafka_2.12-2.4.1/logs
+    depends_on:
+      - zookeeper
+
+
+  kafka_manager:
+    image: hlebalbau/kafka-manager:stable
+    container_name: kafka_manager
+    ports:
+      - "9000:9000"
+    expose:
+      - "9000"
+    environment:
+      ZK_HOSTS: zookeeper:2181
+      APPLICATION_SECRET: "odiF2t11#"
+      KAFKA_MANAGER_AUTH_ENABLED: "true"
+      KAFKA_MANAGER_USERNAME: 'nikamooz'
+      KAFKA_MANAGER_PASSWORD: 'nikamooz'
+    command: -Dpidfile.path=/dev/null
+    depends_on:
+      - zookeeper
+      - kafka1
+      - kafka2
+
+  spark:
+    image: jupyter/pyspark-notebook
+    container_name: pyspark
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+      - "4041:4041"
+      - "4042:4042"
+
+    expose:
+      - "8888"
+      - "4040"
+      - "4041"
+      - "4042"
+
+    environment:
+      CHOWN_HOME: "yes"
+      GRANT_SUDO: "yes"
+      NB_UID: 1000
+      NB_GID: 100
+    deploy:
+     replicas: 1
+     restart_policy:
+       condition: on-failure
+    volumes:
+    - ./workspace:/home/jovyan/work
+
+  nifi:
+    image:  apache/nifi
+    container_name: apache_nifi
+    ports:
+      - "8080:8080"
+      # - "1010:1000"
+      # - "8010:8000"
+    expose:
+      - "8080"
+      - "8443"
+      - "8000"
+      - "10000"
+    volumes:
+      - ./nifi/workspace:/home/nifi/workspace
+      - ./nifi/conf:/opt/nifi/nifi-current/conf
+
+  
+  elasticsearch:
+    image: 'bitnami/elasticsearch'
+    container_name: elasticsearch
+    ports:
+      - '9200:9200'
+      - '9300:9300'
+    volumes:
+      # - 'elasticsearch_data:/bitnami'
+      - ./elasticsearch/data:/bitnami/elasticsearch/data
+
+  kibana:
+    image: 'bitnami/kibana'
+    container_name: kibana
+    ports:
+      - '5601:5601'
+    volumes:
+      - ./elasticsearch/kibana:/bitnami
+    depends_on:
+      - elasticsearch
+
+volumes:
+  kafka_zookeeper:
+  kafka_kafka1:
+  kafka_kafka2:
+
